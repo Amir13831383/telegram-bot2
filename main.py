@@ -6,7 +6,6 @@ import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# تنظیمات
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -43,7 +42,7 @@ def run_telegram_bot():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling()
 
-# --- سرور HTTP ساده برای Render ---
+# --- سرور HTTP برای Render ---
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
@@ -60,12 +59,9 @@ def run_http_server():
     server = HTTPServer(("0.0.0.0", port), HealthHandler)
     server.serve_forever()
 
-# --- اجرای همزمان ---
+# --- اجرا ---
 if __name__ == "__main__":
-    # راه‌اندازی ربات در یک thread جداگانه
     bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
     bot_thread.start()
-
-    # راه‌اندازی سرور HTTP در thread اصلی (برای Render)
-    print("✅ سرور HTTP برای Render آماده است...")
+    print("✅ ربات تلگرام در حال اجراست (در پس‌زمینه)...")
     run_http_server()
