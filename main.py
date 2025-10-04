@@ -18,7 +18,7 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 logging.basicConfig(level=logging.INFO)
 
-# --- ربات تلگرام (async) ---
+# --- ربات تلگرام ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 سلام! من یک ربات هوش مصنوعی هستم. سوال بپرس!")
 
@@ -41,13 +41,10 @@ async def main_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    await app.run_polling()
+    # غیرفعال کردن stop_signals برای جلوگیری از خطا در thread غیر اصلی
+    await app.run_polling(stop_signals=None)
 
-# تابعی که event loop ایجاد می‌کند
-def run_telegram_bot():
-    asyncio.run(main_bot())
-
-# --- سرور HTTP برای Render ---
+# --- سرور HTTP ساده (در thread جداگانه) ---
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
@@ -66,7 +63,10 @@ def run_http_server():
 
 # --- اجرا ---
 if __name__ == "__main__":
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
-    bot_thread.start()
-    print("✅ ربات تلگرام در حال اجراست...")
-    run_http_server()
+    # راه‌اندازی سرور HTTP در یک thread جداگانه
+    http_thread = threading.Thread(target=run_http_server, daemon=True)
+    http_thread.start()
+    print("✅ سرور HTTP در حال اجراست...")
+    
+    # راه‌اندازی ربات در thread اصلی (که event loop دارد)
+    asyncio.run(main_bot())
