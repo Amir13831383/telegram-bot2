@@ -1,12 +1,13 @@
 import os
+import socket
 import threading
 import asyncio
 import logging
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import google.generativeai as genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+# --- تنظیمات ---
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -14,8 +15,6 @@ if not TELEGRAM_TOKEN or not GEMINI_API_KEY:
     raise ValueError("❌ لطفاً TELEGRAM_TOKEN و GEMINI_API_KEY را در Render تنظیم کنید.")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
-
 logging.basicConfig(level=logging.INFO)
 
 # --- ربات تلگرام ---
@@ -41,32 +40,31 @@ async def main_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    # غیرفعال کردن stop_signals برای جلوگیری از خطا در thread غیر اصلی
-    await app.run_polling(stop_signals=None)
+    await app.run_polling(close_loop=False)
 
-# --- سرور HTTP ساده (در thread جداگانه) ---
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"OK")
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-def run_http_server():
+# --- فریب Render: یک پورت را برای 5 ثانیه bind کن ---
+def fake_http_server():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    server.serve_forever()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind(("0.0.0.0", port))
+        sock.listen(1)
+        print(f"✅ پورت {port} برای Render bind شد.")
+        # فقط 5 ثانیه باز بمان تا Render متوجه شود
+        import time
+        time.sleep(5)
+    except Exception as e:
+        print(f"⚠️ خطا در bind کردن پورت: {e}")
+    finally:
+        sock.close()
 
 # --- اجرا ---
 if __name__ == "__main__":
-    # راه‌اندازی سرور HTTP در یک thread جداگانه
-    http_thread = threading.Thread(target=run_http_server, daemon=True)
-    http_thread.start()
-    print("✅ سرور HTTP در حال اجراست...")
+    # مرحله 1: پورت را bind کن (برای Render)
+    fake_http_server()
     
-    # راه‌اندازی ربات در thread اصلی (که event loop دارد)
+    # مرحله 2: ربات را اجرا کن
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    print("🤖 ربات تلگرام در حال اجراست...")
     asyncio.run(main_bot())
