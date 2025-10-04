@@ -1,5 +1,6 @@
 import os
 import threading
+import asyncio
 import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import google.generativeai as genai
@@ -17,7 +18,7 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 logging.basicConfig(level=logging.INFO)
 
-# --- ربات تلگرام ---
+# --- ربات تلگرام (async) ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 سلام! من یک ربات هوش مصنوعی هستم. سوال بپرس!")
 
@@ -36,11 +37,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text("متاسفانه نتوانستم پاسخ بدهم.")
 
-def run_telegram_bot():
+async def main_bot():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.run_polling()
+    await app.run_polling()
+
+# تابعی که event loop ایجاد می‌کند
+def run_telegram_bot():
+    asyncio.run(main_bot())
 
 # --- سرور HTTP برای Render ---
 class HealthHandler(BaseHTTPRequestHandler):
@@ -63,5 +68,5 @@ def run_http_server():
 if __name__ == "__main__":
     bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
     bot_thread.start()
-    print("✅ ربات تلگرام در حال اجراست (در پس‌زمینه)...")
+    print("✅ ربات تلگرام در حال اجراست...")
     run_http_server()
